@@ -3,7 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Task } from '../task.entity';
 import { Repository } from 'typeorm';
 import { CreateTaskDto } from '../dto/create-task.dto';
-import { User } from '../../users/user.entity';
 import { RedisService } from 'src/redis/redis.service';
 import { UpdateTaskDto } from '../dto/update-task.dto';
 
@@ -16,28 +15,38 @@ export class TasksService {
 
   async createTask(userId: number, dto: CreateTaskDto) {
     const task = this.taskRepo.create({ ...dto, user: { id: userId } });
-    console.log(task);
-    return await this.taskRepo.save(task);
+    const saved = await this.taskRepo.save(task);
+    await this.redisService.del(`tasks:user:${userId}`);
+    await this.redisService.del(`tasks:user:${userId}:top`);
+    return saved;
   }
 
-  async getTasks(user: any) {
-    const cacheKey = `tasks:user:${user.userId}`;
+  async getTasks(user: any, filters: { status?: string; priority?: string }) {
+    const userId = user.userId;
+    const noFilters = !filters.status && !filters.priority;
+    const cacheKey = `tasks:user:${userId}`;
 
-    const cached = await this.redisService.get(cacheKey);
-    if (cached) {
-      console.log('📦 از کش');
-      return cached;
+    if (noFilters) {
+      const cached = await this.redisService.get(cacheKey);
+      if (cached) {
+        console.log('from cache');
+        return cached;
+      }
     }
 
+    const where: any = { user: { id: userId } };
+    if (filters.status) where.status = filters.status;
+    if (filters.priority) where.priority = filters.priority;
+
     const tasks = await this.taskRepo.find({
-      where: { user: { id: user.userId } },
+      where,
       order: { createdAt: 'DESC' },
     });
 
-    await this.redisService.set(cacheKey, tasks, 60); // ← TTL = 60s
-    console.log('🗄 از دیتابیس');
+    if (noFilters) await this.redisService.set(cacheKey, tasks, 60);
     return tasks;
   }
+
   async updateTask(userId: number, taskId: number, dto: UpdateTaskDto) {
     const task = await this.taskRepo.findOne({
       where: { id: taskId, user: { id: userId } },
@@ -49,6 +58,8 @@ export class TasksService {
     const updated = await this.taskRepo.save(task);
 
     await this.redisService.del(`tasks:user:${userId}`);
+    await this.redisService.del(`tasks:user:${userId}:top`);
+
     return updated;
   }
 
@@ -61,28 +72,30 @@ export class TasksService {
 
     await this.taskRepo.remove(task);
     await this.redisService.del(`tasks:user:${userId}`);
+    await this.redisService.del(`tasks:user:${userId}:top`);
     return { message: 'Task deleted successfully' };
   }
   async getTopTasks(user: any) {
-  const cacheKey = `tasks:user:${user.userId}:top`;
+    const userId = user.userId;
+    const cacheKey = `tasks:user:${userId}:top`;
 
-  const cached = await this.redisService.get(cacheKey);
-  if (cached) {
-    console.log('📦 top از کش');
-    return cached;
+    const cached = await this.redisService.get(cacheKey);
+    if (cached) {
+      console.log('from cache');
+      return cached;
+    }
+
+    const tasks = await this.taskRepo.find({
+      where: {
+        user: { id: user.userId },
+        priority: 'high',
+      },
+      order: { createdAt: 'DESC' },
+      take: 5,
+    });
+
+    await this.redisService.set(cacheKey, tasks, 60);
+    console.log('from database');
+    return tasks;
   }
-
-  const tasks = await this.taskRepo.find({
-    where: {
-      user: { id: user.userId },
-      priority: 'high',
-    },
-    order: { createdAt: 'DESC' },
-    take: 5,
-  });
-
-  await this.redisService.set(cacheKey, tasks, 60);
-  console.log('🗄 top از دیتابیس');
-  return tasks;
-}
 }

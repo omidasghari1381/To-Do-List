@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Delete,
+  Query,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TasksService } from './providers/tasks.service';
@@ -25,8 +26,12 @@ export class TasksController {
   }
 
   @Get()
-  getAll(@Req() req) {
-    return this.taskService.getTasks(req.user.userId);
+  getAllTasks(
+    @Req() req,
+    @Query('status') status?: string,
+    @Query('priority') priority?: string,
+  ) {
+    return this.taskService.getTasks(req.user, { status, priority });
   }
   @Patch(':id')
   updateTask(@Req() req, @Param('id') id: string, @Body() dto: UpdateTaskDto) {
@@ -35,5 +40,9 @@ export class TasksController {
   @Delete(':id')
   deleteTask(@Req() req, @Param('id') id: string) {
     return this.taskService.deleteTask(req.user.userId, +id);
+  }
+  @Get('top')
+  getTopTasks(@Req() req) {
+    return this.taskService.getTopTasks(req.user);
   }
 }
