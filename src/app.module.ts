@@ -7,6 +7,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { TasksModule } from './tasks/tasks.module';
 import { ConfigModule } from '@nestjs/config';
 import { RedisService } from './redis/redis.service';
+import { RedisModule } from './redis/redis.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { RedisService } from './redis/redis.service';
         database: 'To-Do-List',
       }),
     }),
+    RedisModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisService],
