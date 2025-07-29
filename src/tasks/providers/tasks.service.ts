@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import { CreateTaskDto } from '../dto/create-task.dto';
 import { RedisService } from 'src/redis/redis.service';
 import { UpdateTaskDto } from '../dto/update-task.dto';
+import { taskPriority } from '../enums/taskPriority.enum';
 
 @Injectable()
 export class TasksService {
@@ -29,7 +30,6 @@ export class TasksService {
     if (noFilters) {
       const cached = await this.redisService.get(cacheKey);
       if (cached) {
-        console.log('from cache');
         return cached;
       }
     }
@@ -88,7 +88,7 @@ export class TasksService {
     const tasks = await this.taskRepo.find({
       where: {
         user: { id: user.userId },
-        priority: 'high',
+        priority: taskPriority.HIGH,
       },
       order: { createdAt: 'DESC' },
       take: 5,
